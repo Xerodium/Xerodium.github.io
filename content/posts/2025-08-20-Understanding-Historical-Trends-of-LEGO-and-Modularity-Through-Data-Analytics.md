@@ -4,8 +4,6 @@ date = "2025-08-20T00:00:00+13:00"
 draft = false
 +++
 
-## Understanding Historical Trends of LEGO and Modularity Through Data Analytics
-### 23rd August 2025
 Many moons ago when I was starting out on my tech journey, I came across two things that perked my interest. These were PowerBI by Microsoft which is a tool for visualising data, and a book called Narconomics by Tom Wainwright.
 
 ![](/images/narconomics.png)
