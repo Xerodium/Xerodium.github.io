@@ -3,6 +3,7 @@ languageCode = 'en-us'
 title = 'Maxwell Francis'
 themesDir = 'themes'
 theme = "archie"
+staticDir = ["static", "images"]
 [caches]
   [caches.images]
     dir = ':cacheDir/images'
