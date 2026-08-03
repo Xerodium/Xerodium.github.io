@@ -1,15 +1,16 @@
 {
   "ExpandedNodes": [
     "",
-    "\\.github",
-    "\\.github\\workflows",
+    "\\archetypes",
     "\\content",
-    "\\content\\posts",
+    "\\static",
+    "\\themes",
     "\\themes\\archie",
-    "\\themes\\archie\\layouts",
+    "\\themes\\archie\\assets\\css",
     "\\themes\\archie\\layouts\\partials",
-    "\\themes\\archie\\static"
+    "\\themes\\archie\\static\\fonts",
+    "\\themes\\archie\\static\\js"
   ],
-  "SelectedNode": "\\content\\about.md",
+  "SelectedNode": "\\content\\posts\\2026-07-27-Secure-Code-Review-On-A-Password-Change-API-in-Dotnet.md",
   "PreviewInSolutionExplorer": false
 }
