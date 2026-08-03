@@ -1,29 +1,29 @@
-+++
++++ 
 title = "Secure Code Review On A Password Change API in Dotnet"
 date = "2026-08-03T00:00:00+13:00"
 draft = false
 +++
 
-After being in or around the .NET ecosystem for a while, I have seen faulty authentication mechanisms from insecure password storage, MFA bypass, poor session management, and insecure password change functionality. In this article, I wanted to give a raw and honest write up of a secure code review challenge for a password change API in .NET. This is being done completely blind as I write it so I can go over my thought process. The challenge itself is done through the Secdim platform, which I can't recommend enough.
+After being in or around the .NET ecosystem for a while, I have seen faulty authentication mechanisms from insecure password storage, MFA bypass, poor session management, and insecure password chan[...]
 
-The challenge itself is called `Bad password.cs` and can be found at [https://play.secdim.com/game/c/challenge/bad-passwordcs](https://play.secdim.com/game/c/challenge/bad-passwordcs). The description of the challenge is as follows:
-> A password or a memorized secret must possess a variety of security features. In addition to preventing users from selecting weak passwords, the program should implement crucial security checks on the chosen password and securely store it. This challenge explores essential security controls for a change password API.
+The challenge itself is called `Bad password.cs` and can be found at [https://play.secdim.com/game/c/challenge/bad-passwordcs](https://play.secdim.com/game/c/challenge/bad-passwordcs). The descript[...]
+> A password or a memorized secret must possess a variety of security features. In addition to preventing users from selecting weak passwords, the program should implement crucial security checks [...]
 
 ### Project Setup and Overview
-So starting off, we have a 30 minute time limit to complete the challenge. However as I am writing this article, I won't constrain myself to that time limit. Instead I will write down the process as I go. Starting off, we'll clone the repository and open it up in Visual Studio (worth using if you're new over code as a lot of SDK's and .NET helper functionality comes with it) as opposed to using the online editor. This is done through the following commands:
+So starting off, we have a 30 minute time limit to complete the challenge. However as I am writing this article, I won't constrain myself to that time limit. Instead I will write down the process [...]
 - Opening a terminal and setting my code directory to clone the repository into.
 - Creating an ED25519 SSH key pair and adding the public key to my Secdim account through the command `ssh-keygen -t ed25519 -f C:\Users\MaxFrancis\.ssh\id_ed25519`
 - Testing the SSH connection to Secdim through the command `ssh -T`
-![](/images/test_ssh.png)
+![](https://raw.githubusercontent.com/Xerodium/Xerodium.github.io/main/images/test_ssh.png)
 - Cloning the repository through the command `git clone ssh://git@game.secdim.com/xerodium/password.cs.git`
 
-At this point, you'll hopefully have everything set up and ready to go. Openning up the terminal, I like to look at the folder structure expanded out to get a gauge of the scale and what the makeup of the application is.
-![](/images/layout_code.png)
-Before we continue, the readme available is an instant go to. It tells you the purpose, setup commands, testing, contributing guidelines, and very much is the rules you read before diving in. If you take anything away from this. Read the README always!
+At this point, you'll hopefully have everything set up and ready to go. Openning up the terminal, I like to look at the folder structure expanded out to get a gauge of the scale and what the makeu[...]
+![](https://raw.githubusercontent.com/Xerodium/Xerodium.github.io/main/images/layout_code.png)
+Before we continue, the readme available is an instant go to. It tells you the purpose, setup commands, testing, contributing guidelines, and very much is the rules you read before diving in. If y[...]
 
-Now with this you can see this is clearly a C# application with an associated Dockerfile and Makefile for containerized local deployment and testing. On the note of testing, within the `/test` folder, there are both security and usability tests that are worth looking at in order to understand the program requirements. The architectural style of the .NET Web API is a Controller-Model seperation where the `ApplicationController.cs` handles the requests and will tell us what endpoints are in play and the logic they have, and the `/Models` file handles the Database and User objects with their respective logic (i.e., such as `FakeDb.GeneratePasswordHash(email, pass)`)
-![](/images/generate_password_hash.png)
-The last thing to do is to look at the C# project file (Viewable via the `.csproj` extension file) for both the program and tests to figure out some basic information. Looking at the following, the following is ascertainable:
+Now with this you can see this is clearly a C# application with an associated Dockerfile and Makefile for containerized local deployment and testing. On the note of testing, within the `/test` fol[...]
+![](https://raw.githubusercontent.com/Xerodium/Xerodium.github.io/main/images/generate_password_hash.png)
+The last thing to do is to look at the C# project file (Viewable via the `.csproj` extension file) for both the program and tests to figure out some basic information. Looking at the following, th[...]
 - Both the test and the program projects are running off the `net6.0` target framework
 - The test project is utilising Moq for mocking and NUnit for the tests themselves
 
@@ -95,7 +95,7 @@ namespace program.Controllers
     }
 }
 ```
-Now let's point out the obvious, for the `ChangePasswordRequest` class we take in an email, password, and new password all as strings. When we move down to the `[ApiController]` class level attribute, we have additional attributes each showcasing endpoints:
+Now let's point out the obvious, for the `ChangePasswordRequest` class we take in an email, password, and new password all as strings. When we move down to the `[ApiController]` class level attrib[...]
 - HTTP GET / = This is a GET request that returns a message showcasing how to call the API on localhost 8080
 - HTTP POST /change-password = This performs a change password request and either returns
   - a 200 with a success message response with users email in the body
@@ -103,27 +103,27 @@ Now let's point out the obvious, for the `ChangePasswordRequest` class we take i
   - a 422 when one of the aforementioned values aren't provided
   - a 403 when the provided password is wrong
 
-Now with what we currently have, I'd feel comfortable enough to run the tests and see what gets spat out. We'll do this with `make build`, `make test`, and `make securitytest` (you'd know these commands if you looked at the Makefile or readme), you'll need both Docker Desktop and Make for Windows installed, and are quick google's away from installing.
-![](/images/security_test.png)
-Oh noes! We haz bugz! This is expected due to this being the start of the challenge. Counting across the board we have 7 security tests and 5 usability tests. Not to discount the usability but as this is a secure code challenge, we'll only focus on those and treat usability for regression purposes.
+Now with what we currently have, I'd feel comfortable enough to run the tests and see what gets spat out. We'll do this with `make build`, `make test`, and `make securitytest` (you'd know these c[...]
+![](https://raw.githubusercontent.com/Xerodium/Xerodium.github.io/main/images/security_test.png)
+Oh noes! We haz bugz! This is expected due to this being the start of the challenge. Counting across the board we have 7 security tests and 5 usability tests. Not to discount the usability but as[...]
 
 **test_change_password_cannot_set_weak_pw_per_nist_800_63B_return_403** which checks we have NIST password guidelines for our passwords being 16 characters, one number, one uppercase
 
-Now the other 6 only contain `Assert.AreEqual(true, false);` which will always be false. This tells us that either we shouldn't worry about it. Or the test logic is in the Origin server where the challenge is. At this point all we will do for now is add NIST 800 63 password requirements and commit this upstream to confirm if this fixes what we want.
+Now the other 6 only contain `Assert.AreEqual(true, false);` which will always be false. This tells us that either we shouldn't worry about it. Or the test logic is in the Origin server where the[...]
 ### First fix, setting password requirements
-So immediately my instinct is to logically map out the flow in where to check the password complexity. This may seem trivial and to a degree it is in an application of this scale, however with time-based enumeration, unnecessary compute, etc. it's worth getting in the habit. So mapping the flow out we'd have the following (pw == password)
+So immediately my instinct is to logically map out the flow in where to check the password complexity. This may seem trivial and to a degree it is in an application of this scale, however with ti[...]
 ```
 -----------------     -----------     --------     ----------------     ---------     ---------
 request pw change --> check nulls --> get user --> generate pw hash --> verify pw --> update pw 
 -----------------     -----------     --------     ----------------     ---------     ---------
 ```
-So in effect we need to inject in where as part of the flow we'd need to include the **check new pw complexity**. Due to the compute of the feature itself and the unnecessity of needing to know the user before checking the complexity, I vouched for putting the check prior to **get user** but after **check nulls**. I want to guarantee I'm complexity checking a non-null value but also I want to ensure both non nulls and passwords are adequate before making the db call to actually get the user.
+So in effect we need to inject in where as part of the flow we'd need to include the **check new pw complexity**. Due to the compute of the feature itself and the unnecessity of needing to know t[...]
 ```
 -----------------     -----------     -----------------------    --------     ----------------     ---------     ---------
 request pw change --> check nulls --> check new pw complexity -> get user --> generate pw hash --> verify pw --> update pw 
 -----------------     -----------     -----------------------    --------     ----------------     ---------     ---------
 ```
-Now once I put that code through to both security and usability tests, I was unfortunately hit with failing usability tests even though in my head I had not written any code that should have 'bricked' the platform:
+Now once I put that code through to both security and usability tests, I was unfortunately hit with failing usability tests even though in my head I had not written any code that should have 'bri[...]
 ```
 ...
 
@@ -145,8 +145,8 @@ Now once I put that code through to both security and usability tests, I was unf
 Failed!  - Failed:     2, Passed:     3, Skipped:     0, Total:     5, 
 ```
 
-Now I looked into this and realized that the error code was correct, but what was happening is the usability tests were innapropriately written for this challenge in a way that weak password were used to check for 404/403 errors in testing. Now I can't control the usability test writing from the origin server and instead have to code around the tests rather than place functionality where I intended. To quote Charlie Munger, "Show me the incentive and I'll show you the outcome.", or to quote the streets "don't hate the player, hate the game"
-![](/images/munger.jpg)
+Now I looked into this and realized that the error code was correct, but what was happening is the usability tests were innapropriately written for this challenge in a way that weak password were[...]
+![](https://raw.githubusercontent.com/Xerodium/Xerodium.github.io/main/images/munger.jpg)
 
 ``` dotnet
         [HttpPost("/change-password")]
@@ -200,19 +200,19 @@ Overall, we stick that VerifyNewPasswordMeetsComplexity to return a 403 from wit
                 return StatusCode(200, $"User {request.Email} password successfully changed");
             }
 ```
-Now after this, we should commit what we currently have upstream to the origin server (i.e., the SecDim platform) so that the usability and security tests can be properly run. Usually you can use the GitHub extension within your IDE (Integrated Developer Environment) or you can go ahead and use a desktop application like GitHub Desktop or Git Kraken, however when starting out you should try using the CLI so that you can get used to the commands, a simple flow would be:
+Now after this, we should commit what we currently have upstream to the origin server (i.e., the SecDim platform) so that the usability and security tests can be properly run. Usually you can use[...]
 - `git add .` which will add the files on and deeper to where you currently are to the prepared commit
 - `git commit -m "message"` set a commit with a message around what was changed
 - `git push` which will push the commit set to the origin server.
 
-One should also be cognisant that there are other commands that might need to be set up, such as configuring the username or even installing the git CLI in general. I'd recommend checking out https://rogerdudler.github.io/git-guide/ if you haven't already and are new to SCM.
+One should also be cognisant that there are other commands that might need to be set up, such as configuring the username or even installing the git CLI in general. I'd recommend checking out htt[...]
 
-![](/images/git.png)
+![](https://raw.githubusercontent.com/Xerodium/Xerodium.github.io/main/images/git.png)
 
 Although we commited the code and all was well. We then hit another roadblock being that the password needs to be checked against a list of previously breached hashed passwords.
-![](/images/failed_tests2.png)
+![](https://raw.githubusercontent.com/Xerodium/Xerodium.github.io/main/images/failed_tests2.png)
 
-Having a lot at the tests themselves, it appeard that the hashes were SHA-1'd and the API took an endpoint for the first five characters of the hash, and then compared the rest within the responses. This can be seen with two tests applied in the origin server security tests below.
+Having a lot at the tests themselves, it appeard that the hashes were SHA-1'd and the API took an endpoint for the first five characters of the hash, and then compared the rest within the respons[...]
 ``` dotnet
 public class programSecurityTest
 {
@@ -229,7 +229,7 @@ public class programSecurityTest
                 }
 ```
 
-In order to best achieve this security test and allow the pass, we pass both the httpClient and the newPassword to check against the pwnpasswords API like so, calling the Database function from the controller.
+In order to best achieve this security test and allow the pass, we pass both the httpClient and the newPassword to check against the pwnpasswords API like so, calling the Database function from t[...]
 
 ``` dotnet
         public bool VerifyPasswordNotInBreachDatabase(string newPassword, HttpClient client)
@@ -243,12 +243,12 @@ In order to best achieve this security test and allow the pass, we pass both the
             return !apiResponse.Contains(hash[5..], StringComparison.OrdinalIgnoreCase);
         }
 ```
-Now the rest of these tests included two more security tests, I won't get into the specifics around what I did or how I did it as this article is getting long, however there are two more tests that came about before passing:
-- `test_generate_password_must_use_sha512_1000itr` self explanatory but this involved changing the SHA-1 password hashing algorithm to SHA-512, adjusting the chunked sizes, and upping the iterations to 1000. We had to keep the breached password check to SHA-1 due to the pwnedpasswords only accepting that, and in a real scenario I'd be more comfortable with our own permutated rockyou.txt list due not wanting to send all my customers passwords out to someone else on a weaker hashing format.
-- `test_must_have_unique_salt_per_user` this one just involves changing the salt, recomputing the hashes, and updating the values for the test users. We didn't have to write any logic around unique salting for new accounts due to the challenge only presenting password reset functionality.
+Now the rest of these tests included two more security tests, I won't get into the specifics around what I did or how I did it as this article is getting long, however there are two more tests th[...]
+- `test_generate_password_must_use_sha512_1000itr` self explanatory but this involved changing the SHA-1 password hashing algorithm to SHA-512, adjusting the chunked sizes, and upping the iterati[...]
+- `test_must_have_unique_salt_per_user` this one just involves changing the salt, recomputing the hashes, and updating the values for the test users. We didn't have to write any logic around uniq[...]
 
-![](/images/passed_tests.png)
+![](https://raw.githubusercontent.com/Xerodium/Xerodium.github.io/main/images/passed_tests.png)
 
-Overall this would be a good start. If I had full remit of the password change of any company I've worked for before (this can be hard with responsibilties, prioritization and politics), I'd include tests such as these while also looking at controls baked out from https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html and https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/04-Authentication_Testing/09-Testing_for_Weak_Password_Change_or_Reset_Functionalities 
+Overall this would be a good start. If I had full remit of the password change of any company I've worked for before (this can be hard with responsibilties, prioritization and politics), I'd incl[...]
 
-Well that is all from now. I'll leave this by saying I am not an oracle of secure code review, and am downright shocked at my lack of software principles and ability to produce clean code in comparison to my software engineer counterparts, however I do believe everyone can and should review code. If you suck at code, you can learn what good code looks like. If you do challenges like this one you improve, and if you do get good, you can find issues both big and small in enterprise software.
+Well that is all from now. I'll leave this by saying I am not an oracle of secure code review, and am downright shocked at my lack of software principles and ability to produce clean code in comp[...]
