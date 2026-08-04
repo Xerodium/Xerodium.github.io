@@ -1,0 +1,15 @@
+<div class="description">
+  {{ if isset .Params "description" }}
+    {{ .Description }}
+  {{ else }}
+    {{/*
+      Clean up common summary truncation markers like "[..]", "[...]", etc.
+      The theme's upstream partial used `{{ .Summary }}&hellip;` which can leave
+      literal markers in the generated summary. Replace bracketed dots with
+      a proper ellipsis and output safe HTML.
+    */}}
+    {{ $summary := .Summary | default "" }}
+    {{ $clean := replaceRE "\\[\\.{1,}\\]" "…" $summary }}
+    {{ $clean | safeHTML }}
+  {{ end }}
+</div>
